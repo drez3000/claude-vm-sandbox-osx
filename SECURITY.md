@@ -2,7 +2,7 @@
 
 ## Purpose
 
-macSandbox is designed to provide isolation when running Claude Code with elevated permissions. Security is fundamental to this project.
+claude-vm-sandbox-osx is designed to provide isolation when running Claude Code with elevated permissions. Security is fundamental to this project.
 
 ## Supported Versions
 
@@ -24,20 +24,20 @@ If you discover a security vulnerability, please:
 
 ## Security Model
 
-macSandbox relies on:
+claude-vm-sandbox-osx relies on:
 
 - **Apple's Containerization framework** - Each container runs in a dedicated lightweight VM
 - **Kernel isolation** - Separate kernel per container
 - **Filesystem isolation** - Only mounted directories are accessible
 - **Network isolation** - Containers have isolated network stacks
 
-### What macSandbox Protects Against
+### What claude-vm-sandbox-osx Protects Against
 
 - Accidental file deletion on host
 - Runaway processes affecting host system
 - Unintended system modifications
 
-### What macSandbox Does NOT Protect Against
+### What claude-vm-sandbox-osx Does NOT Protect Against
 
 - Malicious modification of mounted directories (by design, `/workspace` is read-write)
 - Exfiltration of data from mounted directories

@@ -1,145 +1,78 @@
-# macSandbox
+# claude-vm-sandbox-osx
 
-Run Claude Code with `--dangerously-skip-permissions` inside an isolated VM - built by Claude itself.
+Run Claude Code inside an isolated Apple Container VM on macOS.
 
-## The Story
+Your project directory is mounted at `/workspace`. When the process exits, the VM is destroyed and project data is kept.
 
-I wanted Claude to have full autonomy but didn't want it nuking my system. So I asked Claude to solve the problem by building its own cage.
-
-Claude researched Apple's new Containerization framework (WWDC 2025), checked my system specs, installed the tooling, built a container image, wrote a wrapper script, and tested everything. I just approved a few `sudo` commands.
-
-**Total time:** ~15 minutes of conversation.
-
-## What You Get
-
-```bash
-claude                    # normal Claude (unchanged)
-cldyo                     # Claude in isolated VM with --dangerously-skip-permissions
-cldyo -n 4                # 4 parallel Claude instances in separate VMs
-```
-
-Each instance runs in its own lightweight VM. Your project directory is mounted at `/workspace`. Claude can do whatever it wants inside - when it exits, the VM is destroyed.
+Supports both API keys and Oauth tokens (eg. Claude Pro subscription).
 
 ## Requirements
 
-- macOS 26+ (Tahoe)
-- Apple Silicon (M1/M2/M3/M4)
 - [Apple container CLI](https://github.com/apple/container/releases)
 
-## Installation
-
-### 1. Install Apple's container CLI
+## Install
 
 ```bash
-# Download the latest .pkg from:
-# https://github.com/apple/container/releases
-
-sudo installer -pkg container-installer-signed.pkg -target /
-container system start
-container system kernel set --recommended
+git clone https://github.com/drez3000/claude-vm-sandbox-osx claude-vm-sandbox-osx
+cd claude-vm-sandbox-osx
+./install.sh
 ```
 
-### 2. Build the Claude container image
-
-```bash
-cd macSandbox
-container build -t cldyo-claude:latest .
-```
-
-### 3. Install the wrapper script
-
-```bash
-cp cldyo ~/.local/bin/
-chmod +x ~/.local/bin/cldyo
-```
+The installer handles everything: container image build, wrapper scripts, PATH setup, and VSCode extension integration.
 
 ## Usage
 
 ```bash
-# Start Claude with dangerous permissions in isolated VM
-cldyo
+# Claude in an isolated VM
+vmclaude
+vmclaude -c          # continue last conversation
+vmclaude "do stuff"  # start with a prompt
 
-# Continue last conversation
-cldyo -c
-
-# Start with a prompt
-cldyo "refactor this entire codebase"
-
-# Spawn 4 parallel instances (opens Terminal windows)
-cldyo -n 4
+# Run arbitrary commands inside the container
+vmclaude-container /bin/bash
+vmclaude-container claude # same as running `vmclaude`
 ```
-
-### Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ANTHROPIC_API_KEY` | (required) | Passed through to container |
-| `CLDYO_MEMORY` | `4G` | Memory limit per instance |
-| `CLDYO_CPUS` | `2` | CPU cores per instance |
 
 ## How It Works
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  Host macOS                                             │
-│                                                         │
-│  ┌─────────────┐                                        │
-│  │   claude    │  ← Normal, your existing setup         │
-│  └─────────────┘                                        │
-│                                                         │
-│  ┌─────────────────────────────────────────────────────┐│
-│  │  cldyo  →  Apple Container (Lightweight VM)         ││
-│  │  ┌─────────────────────────────────────────────────┐││
-│  │  │  Linux VM (dedicated kernel)                    │││
-│  │  │  • claude --dangerously-skip-permissions        │││
-│  │  │  • /workspace ← your project (mounted)          │││
-│  │  │  • Isolated network, filesystem, processes      │││
-│  │  └─────────────────────────────────────────────────┘││
-│  └─────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────┘
+Host macOS
+├── ~/.vm-claude/        Mounted as container's /home/claude
+│
+└── Apple Container (lightweight VM, dedicated kernel)
+    ├── /usr/local/bin/claude   Claude Code (native binary)
+    ├── /workspace              ← your project directory (mounted)
+    ├── /home/claude            ← ~/.vm-claude (mounted)
+    └── isolated processes (network egress open)
 ```
 
-## Why Apple Containers vs Docker?
+On first run, Claude will prompt for OAuth login inside the container. Credentials are stored in `~/.vm-claude/` (the container's home directory), so they persist across sessions.
 
-| Feature | Docker | Apple Containers |
-|---------|--------|------------------|
-| Isolation | Shared kernel (namespaces) | **Dedicated VM per container** |
-| Startup | Fast | **Sub-second** |
-| License | Commercial use requires license | **Free** |
-| Native | Requires Docker Desktop | **Built into macOS 26** |
+NOTE:
+Filesystem access is limited to whatever you mount into the machine (by default, it's the current directory `vmclaude` is being invoked from), network access is left open.
 
-Apple's approach gives each container its own lightweight VM with a dedicated kernel. Even if Claude escapes the container, it's still trapped in a VM.
+## Why Not Docker / Podman Containers?
 
-## Multi-Instance Use Cases
+- **Kernel sharing.** Docker containers on Linux share the host kernel via namespaces and cgroups. On macOS, Docker Desktop runs containers inside a single Linux VM — containers within that VM still share a kernel with each other.
+- **Apple Containers use per-container VMs.** Apple's Containerization framework (macOS 26+) gives each container its own lightweight VM with a dedicated kernel. A process escaping the container is still confined to that VM.
 
-With 64GB RAM, you can run 8+ parallel Claude instances:
+## Why Not Just Claude Code's Built-in Sandbox?
 
-- **Parallel development** - Multiple features simultaneously
-- **A/B testing** - Compare different approaches
-- **Agent swarm** - Multiple agents on different tasks
-- **Code review** - One instance writes, another reviews
+Claude Code includes a built-in sandbox on macOS that uses Apple's Seatbelt (`sandbox-exec`). Some differences to consider:
 
-## The Meta Part
+- **Seatbelt is process-level sandboxing**, not virtualization. Claude still runs on the host kernel, shares its filesystem namespace, and operates under your user account. A sandbox profile escape gives direct host access.
+- **VM isolation is a stronger boundary.** With Apple Containers, Claude runs inside a separate VM with its own kernel. Even if the process escapes its container, it remains inside the VM.
+- **Seatbelt is well-tested and low-overhead.** It's the same technology used by apps distributed through the Mac App Store. It adds negligible performance cost and requires no separate image or service.
+- **VM isolation adds operational complexity.** It requires building and maintaining a container image, running the Apple container service, and managing mounted volumes. Debugging is less straightforward when issues occur inside the VM.
+- **Seatbelt profiles can be bypassed.** Historically, sandbox escapes have been found in macOS. VM escapes are also possible but are generally considered a higher bar.
 
-Claude built this entire solution:
-1. Researched Apple's Virtualization documentation
-2. Discovered the new Containerization framework
-3. Assessed system requirements
-4. Installed dependencies
-5. Wrote all the code
-6. Tested the setup
+## Important Security Considerations
 
-It essentially built its own sandbox for running with elevated permissions.
+Regardless of whether you use VM isolation, Seatbelt, or any other sandboxing approach:
 
-## Files
-
-- `Containerfile` - Container image definition
-- `cldyo` - Wrapper script for transparent VM execution
+- **Mounted directories are fully accessible.** The VM has read-write access to whatever directories are mounted into it (by default, the current working directory).
+- **Network egress is open.** The container has unrestricted outbound network access.
 
 ## License
 
 MIT
-
----
-
-*Built by Claude, for Claude, with human supervision.*

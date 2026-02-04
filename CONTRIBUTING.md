@@ -1,6 +1,6 @@
-# Contributing to macSandbox
+# Contributing to claude-vm-sandbox-osx
 
-Thanks for your interest in contributing to macSandbox!
+Thanks for your interest in contributing to claude-vm-sandbox-osx!
 
 ## How to Contribute
 
@@ -46,20 +46,20 @@ Thanks for your interest in contributing to macSandbox!
 
 - Features that add significant complexity
 - Support for non-Apple virtualization (Docker, etc.)
-- Breaking changes to the simple `cldyo` interface
+- Breaking changes to the simple `vmclaude` interface
 
 ## Development Setup
 
 ```bash
 # Clone your fork
-git clone https://github.com/YOUR_USERNAME/macSandbox.git
-cd macSandbox
+git clone https://github.com/YOUR_USERNAME/claude-vm-sandbox-osx.git
+cd claude-vm-sandbox-osx
 
 # Build the container image
-container build -t cldyo-claude:latest .
+container build -t vmclaude-claude:latest .
 
 # Test the wrapper
-./cldyo --help
+./vmclaude --help
 ```
 
 ## Questions?

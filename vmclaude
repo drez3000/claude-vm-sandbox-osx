@@ -1,0 +1,104 @@
+#!/bin/bash
+
+set -euo pipefail
+
+CONTAINER_IMAGE="vmclaude-claude:latest"
+INSTANCE_PREFIX="vmclaude"
+CONTAINER_MEMORY="${VMCLAUDE_MEMORY:-512M}"
+CONTAINER_CPUS="${VMCLAUDE_CPUS:-1}"
+
+if [ -t 0 ] && [ -t 1 ]; then
+    INTERACTIVE=true
+else
+    INTERACTIVE=false
+fi
+
+log_info() {
+    if [ "$INTERACTIVE" = true ]; then
+        echo "$1" >&2
+    fi
+}
+
+log_error() {
+    echo "$1" >&2
+}
+
+WORKSPACE_DIR="$(pwd)"
+WORKSPACE_NAME="$(basename "$WORKSPACE_DIR")"
+
+if ! command -v container &> /dev/null; then
+    log_error "Error: Apple 'container' CLI not found"
+    log_error "Install it from: https://github.com/apple/container/releases"
+    exit 1
+fi
+
+# Retry up to 5s for the container service to become ready
+check_and_start_service() {
+    if ! container system status &> /dev/null 2>&1; then
+        log_info "Starting container service..."
+        container system start
+
+        local max_attempts=50
+        local attempt=0
+        while [ $attempt -lt $max_attempts ]; do
+            if container system status &> /dev/null 2>&1; then
+                log_info "Container service started successfully"
+                return 0
+            fi
+            sleep 0.1
+            attempt=$((attempt + 1))
+        done
+
+        log_error "Error: Container service failed to start within 5 seconds"
+        exit 1
+    fi
+}
+
+check_and_start_service
+
+if ! container image list 2>/dev/null | grep -q "vmclaude-claude"; then
+    log_error "Error: vmclaude-claude image not found"
+    log_error "Build it with: container build -t vmclaude-claude:latest <path-to-Containerfile>"
+    exit 1
+fi
+
+CLAUDE_CONFIG_DIR="$HOME/.vm-claude"
+if [[ ! -d "$CLAUDE_CONFIG_DIR" ]]; then
+    log_error "Error: ~/.vm-claude directory not found"
+    log_error ""
+    log_error "Run the installer first:"
+    log_error "  cd claude-vm-sandbox-osx && ./install.sh"
+    exit 1
+fi
+
+CONTAINER_FLAGS=(
+    --name "${INSTANCE_PREFIX}-${WORKSPACE_NAME}-$$"
+    --rm
+    -m "$CONTAINER_MEMORY"
+    -c "$CONTAINER_CPUS"
+    -v "$WORKSPACE_DIR:/workspace"
+    -v "$CLAUDE_CONFIG_DIR:/home/claude"
+    -w /workspace
+)
+
+if [ "$INTERACTIVE" = true ]; then
+    CONTAINER_FLAGS+=(-t -i)
+else
+    CONTAINER_FLAGS+=(-i)
+fi
+
+ENV_FLAGS=()
+if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+    ENV_FLAGS+=(-e "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}")
+fi
+if [ -n "${CLAUDE_CODE_ENTRYPOINT:-}" ]; then
+    ENV_FLAGS+=(-e "CLAUDE_CODE_ENTRYPOINT=${CLAUDE_CODE_ENTRYPOINT}")
+fi
+
+log_info "Starting container..."
+
+container run \
+    "${CONTAINER_FLAGS[@]}" \
+    ${ENV_FLAGS[@]+"${ENV_FLAGS[@]}"} \
+    "$CONTAINER_IMAGE" \
+    "$@"
