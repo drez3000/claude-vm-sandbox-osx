@@ -17,7 +17,7 @@ if [[ "$(uname -m)" != "arm64" ]]; then
     [[ ! $REPLY =~ ^[Yy]$ ]] && exit 1
 fi
 
-echo "[1/6] Checking container CLI..."
+echo "[1/5] Checking container CLI..."
 if ! command -v container &> /dev/null; then
     echo "Error: Apple 'container' CLI not found"
     echo ""
@@ -35,7 +35,7 @@ fi
 echo "Container CLI ready"
 echo ""
 
-echo "[2/6] Setting up VM configuration..."
+echo "[2/5] Setting up VM configuration..."
 VM_CLAUDE_DIR="$HOME/.vm-claude"
 
 if [[ -d "$VM_CLAUDE_DIR" ]]; then
@@ -46,7 +46,7 @@ else
 fi
 echo ""
 
-echo "[3/6] Building container image..."
+echo "[3/5] Building container image..."
 if container image list 2>/dev/null | grep -q "vmclaude-claude"; then
     read -p "Image exists. Rebuild? (y/N) " -r
     if [[ $REPLY =~ ^[Yy]$ ]]; then
@@ -60,7 +60,7 @@ fi
 echo "Container image ready"
 echo ""
 
-echo "[4/6] Installing wrapper scripts..."
+echo "[4/5] Installing wrapper scripts..."
 mkdir -p ~/.local/bin
 
 cp vmclaude ~/.local/bin/vmclaude-container
@@ -76,7 +76,7 @@ chmod +x ~/.local/bin/vmclaude
 echo "Installed: ~/.local/bin/vmclaude"
 echo ""
 
-echo "[5/6] Configuring PATH..."
+echo "[5/5] Configuring PATH..."
 if [[ -n "${ZSH_VERSION:-}" ]]; then
     SHELL_RC="$HOME/.zshrc"
 elif [[ -n "${BASH_VERSION:-}" ]]; then
@@ -93,38 +93,6 @@ if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
     export PATH="$HOME/.local/bin:$PATH"
 else
     echo "PATH already configured"
-fi
-echo ""
-
-echo "[6/6] VSCode extension integration (experimental)..."
-echo "This replaces the Claude VSCode extension's native binary with our wrapper."
-echo "WARNING: This is a work in progress. The Claude VSCode extension will overwrite"
-echo "this change when it auto-updates, unless you disable auto-update manually."
-read -p "Proceed with VSCode integration? (y/N) " -r
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    EXTENSION_BINARY=""
-    for dir in "$HOME"/.vscode/extensions/anthropic.claude-code-*-darwin-arm64; do
-        candidate="$dir/resources/native-binary/claude"
-        if [[ -f "$candidate" ]]; then
-            EXTENSION_BINARY="$candidate"
-        fi
-    done
-
-    if [[ -n "$EXTENSION_BINARY" ]]; then
-        if [[ ! -L "$EXTENSION_BINARY" ]]; then
-            mv "$EXTENSION_BINARY" "${EXTENSION_BINARY}.bak"
-            echo "Backed up original: ${EXTENSION_BINARY}.bak"
-        fi
-        ln -sf "$HOME/.local/bin/vmclaude" "$EXTENSION_BINARY"
-        echo "Symlinked VSCode extension binary to wrapper"
-        echo "Note: re-run install.sh after VSCode extension updates"
-    else
-        echo "VSCode Claude extension not found (skipping)"
-        echo "If installed later, re-run install.sh or manually symlink:"
-        echo "  ln -sf ~/.local/bin/vmclaude <extension-path>/resources/native-binary/claude"
-    fi
-else
-    echo "Skipped"
 fi
 echo ""
 

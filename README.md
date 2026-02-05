@@ -18,7 +18,7 @@ cd claude-vm-sandbox-osx
 ./install.sh
 ```
 
-The installer handles everything: container image build, wrapper scripts, PATH setup, and VSCode extension integration.
+The installer handles everything: container image build, wrapper scripts and PATH setup.
 
 ## Usage
 
